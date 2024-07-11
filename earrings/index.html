@@ -1,0 +1,883 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+
+    <script
+      src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils@0.3.1620247984/camera_utils.js"
+      crossorigin="anonymous"
+    ></script>
+    <script
+      src="https://cdn.jsdelivr.net/npm/@mediapipe/control_utils@0.3.1622680678/control_utils.js"
+      crossorigin="anonymous"
+    ></script>
+    <script
+      src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils@0.3.1620248257/drawing_utils.js"
+      crossorigin="anonymous"
+    ></script>
+    <script
+      src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh@0.4.1628005669/face_mesh.js"
+      crossorigin="anonymous"
+    ></script>
+  </head>
+  <body>
+    <div>
+      <input type="radio" id="contactChoice1"
+       name="contact" value="left" onclick="showSingle();" checked>
+      <label for="contactChoice1">Left</label>
+  
+      <input type="radio" id="contactChoice2"
+       name="contact" value="right" onclick="showSingle();">
+      <label for="contactChoice2">Right</label>
+  
+      <input type="radio" id="contactChoice3"
+       name="contact" value="both" onclick="showDouble();">
+      <label for="contactChoice3">Both</label>
+    </div>
+    
+    <div id = 'singleImage'>
+      <div>
+        <b>Upload image</b>
+        <input
+          type="file"
+          accept="image/gif, image/jpeg, image/png"
+          id="imageInput"
+        />
+      </div>
+      <form>
+        <b>Select earring</b>
+        <select id="imageList">
+          <option disabled>Select image</option>
+        </select>
+      </form>
+    </div>
+
+    <div id = 'doubleImage' style="display: none;">
+      <div>
+        <b>Upload left image</b>
+        <input
+          type="file"
+          accept="image/gif, image/jpeg, image/png"
+          id="leftImageInput"
+        />
+      </div>
+      <form>
+        <b>Select left earring</b>
+        <select id="leftImageList">
+          <option disabled>Select left image</option>
+        </select>
+      </form>
+
+      <div>
+        <b>Upload right image</b>
+        <input
+          type="file"
+          accept="image/gif, image/jpeg, image/png"
+          id="rightImageInput"
+        />
+      </div>
+      <form>
+        <b>Select right earring</b>
+        <select id="rightImageList">
+          <option disabled>Select right image</option>
+        </select>
+      </form>
+    </div>
+
+    <form>
+      <b>Earring height in cm</b>
+      <input type="text" id="earringHeight" value="3" />
+    </form>
+
+    <div class="container">
+      <video class="input_video"></video>
+      <canvas class="output_canvas"></canvas>
+    </div>
+    <div class="loading">
+      <div class="spinner"></div>
+    </div>
+
+    <style>
+      @keyframes spin {
+        0% {
+          transform: rotate(0deg);
+        }
+        100% {
+          transform: rotate(360deg);
+        }
+      }
+
+      .abs {
+        position: absolute;
+      }
+
+      a {
+        color: white;
+        text-decoration: none;
+        &:hover {
+          color: lightblue;
+        }
+      }
+
+      body {
+        bottom: 0;
+        font-family: "Titillium Web", sans-serif;
+        left: 0;
+        margin: 0;
+        position: absolute;
+        right: 0;
+        top: 0;
+        transform-origin: 0px 0px;
+        overflow: hidden;
+      }
+
+      .container {
+        position: absolute;
+        background-color: #596e73;
+      }
+
+      .input_video {
+        position: relative;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        &.selfie {
+          transform: scale(-1, 1);
+        }
+      }
+
+      .output_canvas {
+        position: absolute;
+        left: 0;
+        top: 0;
+      }
+
+      .loading {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        opacity: 1;
+        transition: opacity 1s;
+      }
+
+      .message {
+        font-size: x-large;
+      }
+
+      .spinner {
+        position: absolute;
+        width: 120px;
+        height: 120px;
+        animation: spin 1s linear infinite;
+        border: 32px solid #bebebe;
+        border-top: 32px solid #3498db;
+        border-radius: 50%;
+      }
+
+      .loaded .loading {
+        opacity: 0;
+      }
+
+      .shoutout {
+        left: 0;
+        right: 0;
+        bottom: 40px;
+        text-align: center;
+        font-size: 24px;
+        position: absolute;
+      }
+    </style>
+
+    <script>
+      const videoElement = document.getElementsByClassName("input_video")[0];
+      const canvasElement = document.getElementsByClassName("output_canvas")[0];
+      const canvasCtx = canvasElement.getContext("2d");
+
+      videoElement.style.cssText =
+        "-moz-transform: scale(-1, 1); \
+	-webkit-transform: scale(-1, 1); -o-transform: scale(-1, 1); \
+	transform: scale(-1, 1); filter: FlipH;";
+
+      let jewelryImage = new Image();
+      let leftJewelryImage = new Image();
+      let rightJewelryImage = new Image();
+
+      const imagesList = document.querySelector("#imageList");
+      const leftImagesList = document.querySelector("#leftImageList");
+      const rightImagesList = document.querySelector("#rightImageList");
+
+      const imageInput = document.querySelector("#imageInput");
+      const leftImageInput = document.querySelector("#leftImageInput");
+      const rightImageInput = document.querySelector("#rightImageInput");
+  
+      let selectedImageId = "";
+      let leftSelectedImageId = "";
+      let rightSelectedImageId = "";
+
+      const images = [];
+      const leftImages = [];
+      const rightImages = [];
+
+      let currentTimeEnd;
+      let FPS;
+      let startShakingTime;
+
+      let JewelryWidth;
+      let JewelryHeight;
+      const faceHeight = 120; //mm
+
+      // let xAccelerationThreshold = 0.5;
+      let xVelocityThreshold = 0.05;
+
+      let startShaking = false;
+      let startDumping = false;
+
+      let shakingAngle = 0;
+      let shakingPeriod = 750; //ms
+      let angleAmplitude = 0.2; //rad
+
+      const gamma = 0.0004;
+      let dumpingCoef = 1;
+
+      const numShakingPeriods = 5;
+
+      const canvasWidth = canvasElement.width;
+      const canvasHeight = canvasElement.height;
+
+      function showSingle(){
+        document.getElementById('singleImage').style.display ='block';
+        document.getElementById('doubleImage').style.display ='none';
+      }
+      function showDouble(){
+        document.getElementById('singleImage').style.display ='none';
+        document.getElementById('doubleImage').style.display ='block';
+      }
+
+      function updateSelectOptions(data, list, selectedImageId) {
+        list.textContent = "";
+
+        data.forEach((image) => {
+          const option = document.createElement("option");
+          option.setAttribute("data-id", image.id);
+          option.textContent = image.name;
+
+          if (image.id === selectedImageId) option.selected = true;
+
+          list.append(option);
+        });
+        updateSelectOptions;
+      }
+
+      function onFileSelected(event) {
+        const file = event.target.files[0];
+        const reader = new FileReader();
+
+        let image = this.image;
+        let imageList = this.imageList;
+        let selectedId = this.selectedId;
+
+        reader.onloadend = function (e) {
+          const {
+            target: { result },
+          } = e;
+          const { name } = file;
+
+          image.unshift({ id: `${image.length}-${name}`, name, src: result });
+
+          updateSelectOptions(image,
+            imageList,
+            selectedId);
+        };
+        reader.readAsDataURL(file);
+      }
+
+      imageInput.addEventListener("change", {handleEvent: onFileSelected, image: images, imageList: imagesList, selectedId: selectedImageId});
+      leftImageInput.addEventListener("change", {handleEvent: onFileSelected, image: leftImages, imageList: leftImagesList, selectedId: leftSelectedImageId});
+      rightImageInput.addEventListener("change", {handleEvent: onFileSelected, image: rightImages, imageList: rightImagesList, selectedId: rightSelectedImageId});
+
+      //Aspect ratio
+      let aspectRatio;
+      jewelryImage.addEventListener("load", () => {
+        aspectRatio = jewelryImage.naturalHeight / jewelryImage.naturalWidth;
+      });
+
+      let leftAspectRatio;
+      leftJewelryImage.addEventListener("load", () => {
+        leftAspectRatio = leftJewelryImage.naturalHeight / leftJewelryImage.naturalWidth;
+      });
+
+      let rightAspectRatio;
+      rightJewelryImage.addEventListener("load", () => {
+        rightAspectRatio = rightJewelryImage.naturalHeight / rightJewelryImage.naturalWidth;
+      });
+
+      let exponentialSmoothing = 0.5;
+
+      const finalVideoRatio = 1;
+
+      // const elongationX = 0.7;
+      // const elongationY = 1.2;
+
+      const elongationX = 0.2;
+      const elongationY = 2.55;
+
+      let userInputEarringHeight; // mm
+
+      let i = 0;
+      let totalCounts = 0;
+
+      let poseLandmarks93SmoothedX = [];
+      let poseLandmarks137SmoothedX = [];
+      let poseLandmarks123SmoothedX = [];
+      let poseLandmarks352SmoothedX = [];
+      let poseLandmarks366SmoothedX = [];
+      let poseLandmarks323SmoothedX = [];
+
+      let poseLandmarks234SmoothedY = [];
+      let poseLandmarks93SmoothedY = [];
+      let poseLandmarks132SmoothedY = [];
+      let poseLandmarks58SmoothedY = [];
+
+      let poseLandmarks454SmoothedY = [];
+      let poseLandmarks323SmoothedY = [];
+      let poseLandmarks361SmoothedY = [];
+      let poseLandmarks288SmoothedY = [];
+
+      let poseLandmarks4SmoothedY = [];
+
+      let xVelocity;
+      let xVelocityArray = [];
+
+      //Draw keypoints
+      function drawKeyPoint(landmarks, num, color = "orange", radius = 5) {
+        drawPoint(
+          landmarks[num].x * videoElement.videoWidth * finalVideoRatio,
+          landmarks[num].y * videoElement.videoHeight * finalVideoRatio,
+          String(num),
+          color,
+          radius
+        );
+      }
+
+      function drawPoint(x, y, label = true, color = "orange", size = 5) {
+        // if (color == null) {
+        //   color = "#000";
+        // }
+
+        // if (size == null) {
+        //   size = 5;
+        // }
+
+        let radius = 0.5 * size;
+
+        // to increase smoothing for numbers with decimal part
+        let pointX = Math.round(x - radius);
+        let pointY = Math.round(y - radius);
+
+        canvasCtx.beginPath();
+        canvasCtx.fillStyle = color;
+        canvasCtx.fillRect(pointX, pointY, size, size);
+        canvasCtx.fill();
+
+        if (label) {
+          let textX = Math.round(x);
+          let textY = Math.round(pointY - 5);
+
+          canvasCtx.font = "Italic 14px Arial";
+          canvasCtx.fillStyle = color;
+          canvasCtx.textAlign = "center";
+          canvasCtx.fillText(label, textX, textY);
+        }
+      }
+
+      function drawEarring(
+        outterLandMarkX,
+        middleLandmarkX,
+        innerLandMarkX,
+        secondY,
+        thirdY,
+        noseY,
+        anotherEarY,
+        jewelryImage,
+        side,
+        angle,
+        imageAspectRatio
+      ) {
+        let drawCondition;
+        if (side === "left") {
+          drawCondition = innerLandMarkX > outterLandMarkX;
+        } else if (side === "right") {
+          drawCondition = outterLandMarkX > innerLandMarkX;
+        }
+
+        if (drawCondition) {
+          let CenterX;
+
+          JewelryWidth = JewelryHeight / imageAspectRatio;
+
+          if (middleLandmarkX - outterLandMarkX > 0) {
+            CenterX =
+              outterLandMarkX -
+              (middleLandmarkX - outterLandMarkX) * elongationX;
+          } else {
+            CenterX =
+              outterLandMarkX +
+              (outterLandMarkX - middleLandmarkX) * elongationX;
+          }
+
+          let dy;
+          let balanced_ear;
+
+          if (anotherEarY) {
+            balanced_ear = (thirdY + anotherEarY) / 2;
+          } else {
+            balanced_ear = thirdY;
+          }
+
+          if (noseY > balanced_ear) {
+            dy = secondY - (balanced_ear - noseY) * 0.3;
+          } else {
+            dy = secondY + (balanced_ear - noseY) * 0.35;
+          }
+
+          canvasCtx.translate(
+            CenterX * canvasElement.width,
+            dy * canvasElement.height
+          );
+
+          canvasCtx.rotate(angle);
+
+          canvasCtx.drawImage(
+            jewelryImage,
+            //(-JewelryWidth / 2) * canvasElement.width,
+            -JewelryWidth / 2,
+            0,
+            JewelryWidth, //!!! JewelryWidth * canvasElement.width,
+            JewelryHeight // !!!
+          );
+
+          canvasCtx.rotate(-angle);
+
+          canvasCtx.translate(
+            -CenterX * canvasElement.width,
+            -dy * canvasElement.height
+          );
+        }
+      }
+
+      function smoothArray(smoothedArray, previousValue, currentValue) {
+        return smoothedArray.push(
+          previousValue * exponentialSmoothing +
+            currentValue * (1 - exponentialSmoothing)
+        );
+      }
+
+      function userInput(elemntId) {
+        let variable = document.getElementById(elemntId).value;
+        return variable;
+      }
+
+      function getImage(imList, selectedId, imgs, img){
+        const option = imList.options[imList.selectedIndex];
+        const imageId = option && option.dataset.id;
+        selectedId = imageId;
+        const image = imgs.find((elem) => elem.id === imageId) || {};
+        img.src = image.src || "";
+      }
+
+      function onResults(results) {
+        document.body.classList.add("loaded");
+
+        canvasCtx.save();
+
+        canvasElement.width = videoElement.videoWidth * finalVideoRatio;
+        canvasElement.height = videoElement.videoHeight * finalVideoRatio;
+
+        canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
+        canvasCtx.drawImage(
+          results.image,
+          0,
+          0,
+          canvasElement.width,
+          canvasElement.height // !!!
+        );
+
+        userInputEarringHeight = userInput("earringHeight") * 10 || 30; //mm
+
+        if (results.multiFaceLandmarks) {
+
+          getImage(imagesList, selectedImageId, images, jewelryImage);
+          getImage(leftImagesList, leftSelectedImageId, leftImages, leftJewelryImage);
+          getImage(rightImagesList, rightSelectedImageId, rightImages, rightJewelryImage);
+
+          const canvasAspectRatio = canvasElement.height / canvasElement.width;
+
+          for (const landmarks of results?.multiFaceLandmarks) {
+
+            if (i === 0) {
+              poseLandmarks93SmoothedX.push(landmarks[93].x);
+              poseLandmarks137SmoothedX.push(landmarks[137].x);
+              poseLandmarks123SmoothedX.push(landmarks[123].x);
+              poseLandmarks352SmoothedX.push(landmarks[352].x);
+              poseLandmarks366SmoothedX.push(landmarks[366].x);
+              poseLandmarks323SmoothedX.push(landmarks[323].x);
+
+              poseLandmarks234SmoothedY.push(landmarks[234].y);
+              poseLandmarks93SmoothedY.push(landmarks[93].y);
+              poseLandmarks132SmoothedY.push(landmarks[132].y);
+              poseLandmarks58SmoothedY.push(landmarks[58].y);
+
+              poseLandmarks454SmoothedY.push(landmarks[454].y);
+              poseLandmarks323SmoothedY.push(landmarks[323].y);
+              poseLandmarks361SmoothedY.push(landmarks[361].y);
+              poseLandmarks288SmoothedY.push(landmarks[288].y);
+
+              poseLandmarks4SmoothedY.push(landmarks[4].y);
+
+              xVelocityArray.push(0);
+              // xAccelerationArray.push(0);
+            } else {
+              smoothArray(
+                poseLandmarks93SmoothedX,
+                poseLandmarks93SmoothedX[poseLandmarks93SmoothedX.length - 1],
+                landmarks[93].x
+              );
+              smoothArray(
+                poseLandmarks137SmoothedX,
+                poseLandmarks137SmoothedX[poseLandmarks137SmoothedX.length - 1],
+                landmarks[137].x
+              );
+              smoothArray(
+                poseLandmarks123SmoothedX,
+                poseLandmarks123SmoothedX[poseLandmarks123SmoothedX.length - 1],
+                landmarks[123].x
+              );
+              smoothArray(
+                poseLandmarks352SmoothedX,
+                poseLandmarks352SmoothedX[poseLandmarks352SmoothedX.length - 1],
+                landmarks[352].x
+              );
+              smoothArray(
+                poseLandmarks366SmoothedX,
+                poseLandmarks366SmoothedX[poseLandmarks366SmoothedX.length - 1],
+                landmarks[366].x
+              );
+              smoothArray(
+                poseLandmarks323SmoothedX,
+                poseLandmarks323SmoothedX[poseLandmarks323SmoothedX.length - 1],
+                landmarks[323].x
+              );
+
+              smoothArray(
+                poseLandmarks234SmoothedY,
+                poseLandmarks234SmoothedY[poseLandmarks234SmoothedY.length - 1],
+                landmarks[234].y
+              );
+              smoothArray(
+                poseLandmarks93SmoothedY,
+                poseLandmarks93SmoothedY[poseLandmarks93SmoothedY.length - 1],
+                landmarks[93].y
+              );
+              smoothArray(
+                poseLandmarks132SmoothedY,
+                poseLandmarks132SmoothedY[poseLandmarks132SmoothedY.length - 1],
+                landmarks[132].y
+              );
+              smoothArray(
+                poseLandmarks58SmoothedY,
+                poseLandmarks58SmoothedY[poseLandmarks58SmoothedY.length - 1],
+                landmarks[58].y
+              );
+
+              smoothArray(
+                poseLandmarks454SmoothedY,
+                poseLandmarks454SmoothedY[poseLandmarks454SmoothedY.length - 1],
+                landmarks[454].y
+              );
+              smoothArray(
+                poseLandmarks323SmoothedY,
+                poseLandmarks323SmoothedY[poseLandmarks323SmoothedY.length - 1],
+                landmarks[323].y
+              );
+              smoothArray(
+                poseLandmarks361SmoothedY,
+                poseLandmarks361SmoothedY[poseLandmarks361SmoothedY.length - 1],
+                landmarks[361].y
+              );
+              smoothArray(
+                poseLandmarks288SmoothedY,
+                poseLandmarks288SmoothedY[poseLandmarks288SmoothedY.length - 1],
+                landmarks[288].y
+              );
+
+              smoothArray(
+                poseLandmarks4SmoothedY,
+                poseLandmarks4SmoothedY[poseLandmarks4SmoothedY.length - 1],
+                landmarks[4].y
+              );
+
+              // xDrift =
+              //   (poseLandmarks123SmoothedX[i] -
+              //     poseLandmarks123SmoothedX[i - 1] +
+              //     poseLandmarks352SmoothedX[i] -
+              //     poseLandmarks352SmoothedX[i - 1]) /
+              //   2;
+
+              // console.log("xDrift", xDrift);
+
+              xVelocity =
+                (Math.abs(
+                  poseLandmarks123SmoothedX[
+                    poseLandmarks123SmoothedX.length - 1
+                  ] -
+                    poseLandmarks123SmoothedX[
+                      poseLandmarks123SmoothedX.length - 2
+                    ]
+                ) +
+                  Math.abs(
+                    poseLandmarks352SmoothedX[
+                      poseLandmarks352SmoothedX.length - 1
+                    ] -
+                      poseLandmarks352SmoothedX[
+                        poseLandmarks352SmoothedX.length - 2
+                      ]
+                  )) *
+                FPS;
+
+              console.log("xVelocity", xVelocity);
+
+              smoothArray(
+                xVelocityArray,
+                xVelocityArray[xVelocityArray.length - 1],
+                xVelocity
+              );
+            }
+
+            JewelryHeight =
+              (userInputEarringHeight / faceHeight) *
+              (landmarks[152].y - landmarks[168].y) *
+              canvasElement.height;
+
+            // if (
+            //   xVelocityArray[xVelocityArray.length - 1] > xVelocityThreshold &&
+            //   startShaking === false
+            // ) {
+            //   startShakingTime = Date.now();
+            //   startDumpingTime = Date.now();
+            //   startShaking = true;
+            // }
+
+            // if (
+            //   startShaking === true &&
+            //   Date.now() - startShakingTime < numShakingPeriods * shakingPeriod
+            // ) {
+            //   shakingAngle =
+            //     angleAmplitude *
+            //     Math.cos(
+            //       ((2 * Math.PI) / shakingPeriod) * (Date.now() - startShakingTime) +
+            //         Math.PI / 2
+            //     );
+            // }
+
+            // if (
+            //   startShaking === true &&
+            //   Date.now() - startShakingTime > 4 * shakingPeriod
+            // ) {
+            //   startShaking = false;
+            //   shakingAngle = 0;
+            // }
+
+            if (
+              xVelocityArray[xVelocityArray.length - 1] > xVelocityThreshold &&
+              startShaking === false
+            ) {
+              startShakingTime = Date.now();
+              startDumpingTime = Date.now();
+              startShaking = true;
+            }
+
+            if (
+              startShaking === true &&
+              Date.now() - startShakingTime < numShakingPeriods * shakingPeriod
+            ) {
+              // if (
+              //   xVelocityArray[xVelocityArray.length - 1] < xVelocityThreshold &&
+              //   xVelocityArray[xVelocityArray.length - 2] > xVelocityThreshold
+              // ) {
+              //   let startDumpingTime = Date.now();
+              //   startDumping = true;
+              //   if (startDumping === true) {
+              //     dumpingCoef = Math.exp(-gamma * (Date.now() - startDumpingTime));
+              //   } else {
+              //     dumpingCoef = 1;
+              //   }
+              // }
+
+              // if (xVelocityArray[xVelocityArray.length - 1] > xVelocityThreshold) {
+              //   startDumping = false;
+              // }
+
+              if (
+                xVelocityArray[xVelocityArray.length - 1] > xVelocityThreshold
+              ) {
+                startDumpingTime = Date.now();
+              }
+
+              dumpingCoef = Math.exp(-gamma * (Date.now() - startDumpingTime));
+
+              console.log("dumpingCoef", dumpingCoef);
+
+              shakingAngle =
+                angleAmplitude *
+                dumpingCoef *
+                Math.cos(
+                  ((2 * Math.PI) / shakingPeriod) *
+                    (Date.now() - startShakingTime) +
+                    Math.PI / 2
+                );
+            }
+
+            if (
+              startShaking === true &&
+              Date.now() - startShakingTime > numShakingPeriods * shakingPeriod
+            ) {
+              startShaking = false;
+              shakingAngle = 0;
+            }
+
+            if(document.getElementById('contactChoice1').checked){
+              drawEarring(
+                poseLandmarks93SmoothedX[poseLandmarks93SmoothedX.length - 1],
+                poseLandmarks137SmoothedX[poseLandmarks137SmoothedX.length - 1],
+                poseLandmarks123SmoothedX[poseLandmarks123SmoothedX.length - 1],
+                poseLandmarks93SmoothedY[poseLandmarks93SmoothedY.length - 1],
+                poseLandmarks132SmoothedY[poseLandmarks132SmoothedY.length - 1],
+                poseLandmarks4SmoothedY[poseLandmarks4SmoothedY.length - 1],
+                poseLandmarks361SmoothedY[poseLandmarks361SmoothedY.length - 1],
+                jewelryImage,
+                "left",
+                shakingAngle,
+                aspectRatio
+              );
+            }
+
+            if(document.getElementById('contactChoice2').checked){
+              drawEarring(
+                poseLandmarks323SmoothedX[poseLandmarks323SmoothedX.length - 1],
+                poseLandmarks366SmoothedX[poseLandmarks366SmoothedX.length - 1],
+                poseLandmarks352SmoothedX[poseLandmarks352SmoothedX.length - 1],
+                poseLandmarks323SmoothedY[poseLandmarks323SmoothedY.length - 1],
+                poseLandmarks361SmoothedY[poseLandmarks361SmoothedY.length - 1],
+                poseLandmarks4SmoothedY[poseLandmarks4SmoothedY.length - 1],
+                poseLandmarks132SmoothedY[poseLandmarks132SmoothedY.length - 1],
+                jewelryImage,
+                "right",
+                shakingAngle,
+                aspectRatio
+              );
+            }
+
+            if(document.getElementById('contactChoice3').checked){
+              drawEarring(
+                poseLandmarks323SmoothedX[poseLandmarks323SmoothedX.length - 1],
+                poseLandmarks366SmoothedX[poseLandmarks366SmoothedX.length - 1],
+                poseLandmarks352SmoothedX[poseLandmarks352SmoothedX.length - 1],
+                poseLandmarks323SmoothedY[poseLandmarks323SmoothedY.length - 1],
+                poseLandmarks361SmoothedY[poseLandmarks361SmoothedY.length - 1],
+                poseLandmarks4SmoothedY[poseLandmarks4SmoothedY.length - 1],
+                poseLandmarks132SmoothedY[poseLandmarks132SmoothedY.length - 1],
+                rightJewelryImage,
+                "right",
+                shakingAngle,
+                rightAspectRatio
+              );
+              drawEarring(
+                poseLandmarks93SmoothedX[poseLandmarks93SmoothedX.length - 1],
+                poseLandmarks137SmoothedX[poseLandmarks137SmoothedX.length - 1],
+                poseLandmarks123SmoothedX[poseLandmarks123SmoothedX.length - 1],
+                poseLandmarks93SmoothedY[poseLandmarks93SmoothedY.length - 1],
+                poseLandmarks132SmoothedY[poseLandmarks132SmoothedY.length - 1],
+                poseLandmarks4SmoothedY[poseLandmarks4SmoothedY.length - 1],
+                poseLandmarks361SmoothedY[poseLandmarks361SmoothedY.length - 1],
+                leftJewelryImage,
+                "left",
+                shakingAngle,
+                leftAspectRatio
+              );
+            }
+
+            // drawKeyPoint(landmarks, 93);
+            // drawKeyPoint(landmarks, 137);
+            // drawKeyPoint(landmarks, 323);
+            // drawKeyPoint(landmarks, 366);
+            // drawKeyPoint(landmarks, 123);
+            // drawKeyPoint(landmarks, 352);
+
+            // drawKeyPoint(landmarks, 168);
+            // drawKeyPoint(landmarks, 152);
+          }
+
+          if (i > 1) {
+            poseLandmarks93SmoothedX.shift();
+            poseLandmarks137SmoothedX.shift();
+            poseLandmarks123SmoothedX.shift();
+            poseLandmarks352SmoothedX.shift();
+            poseLandmarks366SmoothedX.shift();
+            poseLandmarks323SmoothedX.shift();
+
+            poseLandmarks234SmoothedY.shift();
+            poseLandmarks93SmoothedY.shift();
+            poseLandmarks132SmoothedY.shift();
+            poseLandmarks58SmoothedY.shift();
+
+            poseLandmarks454SmoothedY.shift();
+            poseLandmarks323SmoothedY.shift();
+            poseLandmarks361SmoothedY.shift();
+            poseLandmarks288SmoothedY.shift();
+
+            poseLandmarks4SmoothedY.shift();
+
+            xVelocityArray.shift();
+          }
+          i++;
+        }
+        canvasCtx.restore();
+
+        totalCounts++;
+        console.log(totalCounts);
+
+        currentTimeEnd = Date.now();
+
+        FPS = (totalCounts / (currentTimeEnd - startTime)) * 1000; //time in miliseconds
+        console.log("FPS", FPS);
+
+        exponentialSmoothing = Math.min(0.01 * FPS + 0.16, 0.9);
+      }
+
+      const faceMesh = new FaceMesh({
+        locateFile: (file) => {
+          return `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh@0.4.1628005669/${file}`;
+        },
+      });
+      faceMesh.setOptions({
+        selfieMode: true,
+        maxNumFaces: 1,
+        minDetectionConfidence: 0.5,
+        minTrackingConfidence: 0.5,
+        refineLandmarks: true,
+      });
+      faceMesh.onResults(onResults);
+
+      const camera = new Camera(videoElement, {
+        onFrame: async () => {
+          await faceMesh.send({ image: videoElement });
+        },
+      });
+
+      startTime = Date.now();
+      camera.start();
+    </script>
+  </body>
+</html>
