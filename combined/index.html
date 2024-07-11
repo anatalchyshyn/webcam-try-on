@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+
+    <script
+      src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils@0.3.1620247984/camera_utils.js"
+      crossorigin="anonymous"
+    ></script>
+    <script
+      src="https://cdn.jsdelivr.net/npm/@mediapipe/control_utils@0.3.1622680678/control_utils.js"
+      crossorigin="anonymous"
+    ></script>
+    <script
+      src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils@0.3.1620248257/drawing_utils.js"
+      crossorigin="anonymous"
+    ></script>
+    <script
+      src="https://cdn.jsdelivr.net/npm/@mediapipe/holistic@0.4.1633559476/holistic.js"
+      crossorigin="anonymous"
+    ></script>
+    <script defer src="earring_settings.js"></script>
+    <script defer src="pendant_settings.js"></script>
+    <script defer src="watch_settings.js"></script>
+    <script defer src="ring_settings.js"></script>
+    <script defer src="script.js"></script>
+
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+
+    
+    <input type="checkbox" id="hd-1" class="hide"/>
+    <label for="hd-1" >Earrings</label>
+    <div class="jewelry_upload">
+      <b>Upload image</b>
+      <input
+        type="file"
+        accept="image/gif, image/jpeg, image/png"
+        id="imageInput"
+      />
+      <form>
+        <b>Select earring</b>
+        <select id="imagesList">
+          <option disabled>Select image</option>
+        </select>
+      </form>
+      <form>
+        <b>Earring height in cm</b>
+        <input type="text" id="earringHeight" value="3" />
+      </form>
+    </div>
+
+    </br>
+
+    <input type="checkbox" id="hd-2" class="hide"/>
+    <label for="hd-2" >Pendant</label>
+    <div class="jewelry_upload">
+      <b>Upload chain image</b>
+      <input
+        type="file"
+        accept="image/gif, image/jpeg, image/png"
+        id="imageChainInput"
+      />
+      <form>
+        <b>Select chain</b>
+        <select id="chainList">
+          <option disabled>Select image</option>
+        </select>
+      </form>
+
+      <form>
+        <b>Chain height in mm</b>
+        <input type="text" id="chainHeight" value="150" />
+      </form>
+
+      <label for="chainHeightSlider">Chain height in cm: </label>
+      <input
+        type="range"
+        name="chainHeightSlider"
+        id="chainHeightSlider"
+        min="5"
+        max="25"
+        step="0.5"
+        value="15"
+      />
+
+      <output class="chainHeightSlider-output" for="chainHeightSlider">15</output>
+      </br>
+
+      <b>Upload necklace image</b>
+      <input
+        type="file"
+        accept="image/gif, image/jpeg, image/png"
+        id="imageNecklaceInput"
+      />
+      <form>
+        <b>Select necklace</b>
+        <select id="necklaceList">
+          <option disabled>Select image</option>
+        </select>
+      </form>
+
+      <label for="necklaceHeightSlider">Necklace height in cm: </label>
+      <input
+        type="range"
+        name="necklaceHeightSlider"
+        id="necklaceHeightSlider"
+        min="0.5"
+        max="10"
+        step="0.1"
+        value="3"
+      />
+
+      <output class="necklaceHeightSlider-output" for="necklaceHeightSlider">3</output>
+    </div>
+
+    </br>
+
+    <input type="checkbox" id="hd-3" class="hide"/>
+    <label for="hd-3" >Watches</label>
+    <div class="jewelry_upload">
+      <div>
+        <b>Upload image</b>
+        <input
+          type="file"
+          accept="image/gif, image/jpeg, image/png"
+          id="watchImageInput"
+        />
+      </div>
+      <form>
+        <b>Select item image</b>
+        <select id="watchImageList">
+          <option disabled>Select image</option>
+        </select>
+      </form>
+  
+      <form>
+        <b>Item width cm</b>
+        <input type="text" id="watchWidth" value="5" />
+      </form>
+    </div>
+
+    </br>
+
+    <input type="checkbox" id="hd-4" class="hide"/>
+    <label for="hd-4" >Rings</label>
+    <div class="jewelry_upload">
+      <form>
+        <b> Select finger to put ring on </b>
+        <select id="selectFinger">
+          <option>ring finger</option>
+          <option>middle finger</option>
+          <option>index finger</option>
+          <option>pinky</option>
+        </select>
+      </form>
+  
+      <div>
+        <b>Upload ring image</b>
+        <input
+          type="file"
+          accept="image/gif, image/jpeg, image/png"
+          id="imageShankInput"
+        />
+      </div>
+  
+      <form>
+        <b>Select shank</b>
+        <select id="imageShankList">
+          <option disabled>Select image</option>
+        </select>
+      </form>
+  
+      <form>
+        <b>Ring diameter in cm</b>
+        <input type="text" id="ringDiameter" value="1.5" />
+      </form>
+    
+    <div>
+      <b>Upload gem image</b>
+      <input
+        type="file"
+        accept="image/gif, image/jpeg, image/png"
+        id="imageGemInput"
+      />
+    </div>
+
+    <form>
+      <b>Select gem</b>
+      <select id="imageGemList">
+        <option disabled>Select image</option>
+      </select>
+    </form>
+
+    <form>
+      <b> Gem shape </b>
+      <select id="selectShape">
+        <option>Round</option>
+        <option>Oval</option>
+        <option>Heart</option>
+        <option>Triangular</option>
+        <option>Emerald</option>
+        <option>Princess</option>
+        <option>Radiant</option>
+        <option>Marquise</option>
+        <option>Pear</option>
+      </select>
+    </form>
+
+    <form>
+      <b>Gem weight in carats</b>
+      <input type="text" id="gemWeight" value="0" />
+    </form>
+
+    <b>Gem height in:</b>
+    <select id='heightFormat'>
+          <option>mm</option>
+          <option>inch</option>
+    </select>
+    <input type="text" id="userInputGemHeight" value="0"/>
+
+  </div>
+  
+
+    <div class="container">
+      <video class="input_video"></video>
+      <canvas class="output_canvas"></canvas>
+    </div>
+    <div class="loading">
+      <div class="spinner"></div>
+    </div>
+  </body>
+</html>
